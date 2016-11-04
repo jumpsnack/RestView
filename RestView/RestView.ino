@@ -3,15 +3,15 @@
 #include <Process.h>
 
 //define xively connect info
-#define APIKEY        "MVScvg6mxjDRUI4lhucBlm1hRFe2gALlp5KVyubkofqFqGMq"   // replace your xively api key here
-#define FEEDID        "1422199874"                   // replace your xively feed ID
+#define APIKEY        "pzRV0MjPrEFfOT4zHAdSEkJwWvt9xjiOJvCJZkvYSoruMvgk"   // replace your xively api key here
+#define FEEDID        "46267484"                   // replace your xively feed ID
 
 #define DHTPIN 2
 #define DHTTYPE DHT11
 DHT dht(DHTPIN, DHTTYPE);
 
 // set up net client info:
-const unsigned long postingInterval = 5000;  //delay between updates to xively.com
+const unsigned long postingInterval = 4000;  //delay between updates to xively.com
 unsigned long lastRequest = 0;      // when you last made a request
 String dataString = "";
 
