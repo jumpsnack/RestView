@@ -11,7 +11,7 @@
 DHT dht(DHTPIN, DHTTYPE);
 
 // set up net client info:
-const unsigned long postingInterval = 6000;  //delay between updates to xively.com
+const unsigned long postingInterval = 5000;  //delay between updates to xively.com
 unsigned long lastRequest = 0;      // when you last made a request
 String dataString = "";
 
@@ -41,8 +41,9 @@ void loop()
     sendData();
     lastRequest = now;
   }
+}
 
-void updateData() {
+void updateData(){
     // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
     float h = dht.readHumidity();
@@ -114,4 +115,4 @@ void sendData() {
     Console.write(c);
   }
 }
-}
+
