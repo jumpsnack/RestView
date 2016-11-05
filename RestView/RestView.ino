@@ -105,7 +105,6 @@ void updateData() {
    //sprintf(btnbuffer, "%d", btn_state);
    itoa(ir_state, irbuffer, 10);
    itoa(btn_state, btnbuffer, 10);
-
     dtostrf(t, 5, 2, tbuffer);
     dtostrf(h, 5, 2, hbuffer);
 
