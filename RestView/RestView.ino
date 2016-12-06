@@ -5,6 +5,7 @@
 #include <YunServer.h>
 #include <DHT.h>
 #include <SPI.h>
+#include <IRremote.h>
 
 void updateData();
 void sendData();
@@ -28,9 +29,13 @@ DHT dht(DHTPIN, DHTTYPE);
 */
 #define IRPIN_1 4
 int ir_1_state = 0, last_1_state = 0;
+#define IR1LED_SU 11
+#define IR1LED_IN 5
 
 #define IRPIN_2 6
 int ir_2_state = 0, last_2_state = 0;
+#define IR2LED_SU 12
+#define IR2LED_IN 7
 
 /**
     PIR SET
@@ -46,6 +51,19 @@ int pir_2_state = 0;
 */
 #define BTNPIN 9
 int btn_state = 0;
+
+/**
+  IR Remote
+*/
+#define REMOTE_PIN 13
+#define IR_NEED_PAPER 0xFFA25D
+#define IR_NEED_REPAIR 0xFFE21D
+IRrecv irrcv(REMOTE_PIN);
+decode_results results;
+int need_1_paper = 0;
+int need_2_paper = 0;
+int need_1_repair = 0;
+int need_2_repair = 0;
 
 static char tbuffer[6];
 static char hbuffer[6];
@@ -71,13 +89,28 @@ void setup()
   digitalWrite(IRPIN_1, HIGH);
   digitalWrite(IRPIN_2, HIGH);
 
+  pinMode(IR1LED_SU, OUTPUT);
+  pinMode(IR1LED_IN, OUTPUT);
+  digitalWrite(IR1LED_SU, LOW);
+  digitalWrite(IR1LED_IN, LOW);
+
+  pinMode(IR2LED_SU, OUTPUT);
+  pinMode(IR2LED_IN, OUTPUT);
+  digitalWrite(IR2LED_SU, LOW);
+  digitalWrite(IR2LED_IN, LOW);
+
   /**
      Button SET
   */
   pinMode(BTNPIN, INPUT);
 
+  /**
+    Remote SET
+  */
+  irrcv.enableIRIn();
 
   while (!Console);
+
   parametri = "cmd=clear";
   sendData();
 }
@@ -91,16 +124,46 @@ void loop()
 void updateData() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
-  
+
   ir_1_state = digitalRead(IRPIN_1);
   ir_2_state = digitalRead(IRPIN_2);
   pir_1_state = digitalRead(PIRPIN_1);
   pir_2_state = digitalRead(PIRPIN_2);
   btn_state = digitalRead(BTNPIN);
 
+  if (ir_1_state == 1) {//휴지가 소모됨
+    digitalWrite(IR1LED_IN, HIGH);
+    digitalWrite(IR1LED_SU, LOW);
+  } else if (ir_1_state == 0) { //휴지가 충분함
+    digitalWrite(IR1LED_SU, HIGH);
+    digitalWrite(IR1LED_IN, LOW);
+  }
+
+  if (ir_2_state == 1) {//휴지가 소모됨
+    digitalWrite(IR2LED_IN, HIGH);
+    digitalWrite(IR2LED_SU, LOW);
+  } else if (ir_2_state == 0) { //휴지가 충분함
+    digitalWrite(IR2LED_SU, HIGH);
+    digitalWrite(IR2LED_IN, LOW);
+  }
+need_1_paper = need_1_repair = 0;
+  if (irrcv.decode(&results)) {
+    Console.println(results.value, HEX);
+
+    if (results.value == IR_NEED_PAPER) {
+      need_1_paper = 1;
+    } else if (results.value == IR_NEED_REPAIR) {
+      need_1_repair = 1;
+    } else {
+      need_1_paper = need_1_repair = 0;
+    }
+    
+    irrcv.resume();
+  }
+
   if (isnan(t) || isnan(h) || isnan(ir_1_state) || isnan(ir_2_state) || isnan(pir_1_state) || isnan(pir_2_state))
   {
-    Console.println("\nFailed to read from DHT");
+    Console.println("\nFailed to read from Sensor");
   }
   else
   {
@@ -121,6 +184,16 @@ void updateData() {
     Console.print("\t");
     Console.print("PIR 2 : ");
     Console.println(pir_2_state);
+    Console.print("PAPER 1 : ");
+    Console.print(need_1_paper);
+    Console.print("\t");
+    Console.print("PAPER 2 : ");
+    Console.println(need_2_paper);
+    Console.print("REPAIR 1 : ");
+    Console.print(need_1_repair);
+    Console.print("\t");
+    Console.print("REPAIR 2 : ");
+    Console.println(need_2_repair);
     //Console.print("BTN: ");
     //Console.print(btn_state);
     Console.print("\n");
@@ -157,6 +230,14 @@ void updateData() {
     parametri += ",BTN/";
     parametri += btnbuffer;
 
+    //add PAPER
+    parametri += ",PAPER/";
+    parametri += need_1_paper;
+
+    //add REPAIR
+    parametri += ",REPAIR/";
+    parametri += need_1_repair;
+
     //add Humidity:
     parametri += "&2=";
     parametri += "Humidity/";
@@ -176,13 +257,21 @@ void updateData() {
     //add BTN
     parametri += ",BTN/";
     parametri += btnbuffer;
+
+    //add PAPER
+    parametri += ",PAPER/";
+    parametri += need_2_paper;
+
+    //add REPAIR
+    parametri += ",REPAIR/";
+    parametri += need_2_repair;
   }
 }
 
 void sendData() {
   if (client.connect(server, 443)) {
     Console.println("Sending data...");
-    delay(2500);
+    delay(500);
     client.print("POST ");
     client.print("/?");
     client.print(parametri);
@@ -193,7 +282,7 @@ void sendData() {
   } else {
     Console.println("connection failed");
     //digitalWrite(led_rosso, HIGH);
-    delay(1000);
+    delay(500);
   }
   if (client.connected()) {
     client.stop();   //disconnect from server
