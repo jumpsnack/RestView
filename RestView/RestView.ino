@@ -1,3 +1,5 @@
+#include <LiquidCrystal_I2C.h>
+
 #include <Bridge.h>
 #include <Console.h>
 #include <Process.h>
@@ -47,23 +49,32 @@ int pir_1_state = 0;
 int pir_2_state = 0;
 
 /**
-   Button SET
-*/
-#define BTNPIN 9
-int btn_state = 0;
-
-/**
   IR Remote
 */
-#define REMOTE_PIN 13
-#define IR_NEED_PAPER 0xFFA25D
-#define IR_NEED_REPAIR 0xFFE21D
-IRrecv irrcv(REMOTE_PIN);
-decode_results results;
+#define REMOTE_1_PIN 13
+#define REMOTE_2_PIN 9
+#define IR_NEED_PAPER 0x48B748B7
+#define IR_NEED_REPAIR 0x48B76897
+IRrecv ir1rcv(REMOTE_1_PIN);
+IRrecv ir2rcv(REMOTE_2_PIN);
+decode_results results1;
+decode_results results2;
 int need_1_paper = 0;
 int need_2_paper = 0;
 int need_1_repair = 0;
 int need_2_repair = 0;
+
+/**
+  TIME
+*/
+String timestamp;
+
+/**
+  LCD set
+*/
+LiquidCrystal_I2C lcd(0x3F, 16, 2);
+String msg1 = "Possible to use>>";
+String msg2 = "";
 
 static char tbuffer[6];
 static char hbuffer[6];
@@ -100,19 +111,21 @@ void setup()
   digitalWrite(IR2LED_IN, LOW);
 
   /**
-     Button SET
-  */
-  pinMode(BTNPIN, INPUT);
-
-  /**
     Remote SET
   */
-  irrcv.enableIRIn();
+  ir1rcv.enableIRIn();
+  ir2rcv.enableIRIn();
+  
+  /**
+    LCD SET
+  */
+  lcd.init();
+  lcd.backlight();
 
   while (!Console);
 
-  parametri = "cmd=clear";
-  sendData();
+  //parametri = "cmd=clear";
+  //sendData();
 }
 
 void loop()
@@ -125,16 +138,20 @@ void updateData() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
 
+  lcd.clear();
+  lcd.print(msg1);
+  lcd.setCursor(0, 1);
+  msg2 = "";
   ir_1_state = digitalRead(IRPIN_1);
   ir_2_state = digitalRead(IRPIN_2);
   pir_1_state = digitalRead(PIRPIN_1);
   pir_2_state = digitalRead(PIRPIN_2);
-  btn_state = digitalRead(BTNPIN);
 
   if (ir_1_state == 1) {//휴지가 소모됨
     digitalWrite(IR1LED_IN, HIGH);
     digitalWrite(IR1LED_SU, LOW);
   } else if (ir_1_state == 0) { //휴지가 충분함
+    msg2 += "1 ";
     digitalWrite(IR1LED_SU, HIGH);
     digitalWrite(IR1LED_IN, LOW);
   }
@@ -143,22 +160,39 @@ void updateData() {
     digitalWrite(IR2LED_IN, HIGH);
     digitalWrite(IR2LED_SU, LOW);
   } else if (ir_2_state == 0) { //휴지가 충분함
+    msg2 += "2 ";
     digitalWrite(IR2LED_SU, HIGH);
     digitalWrite(IR2LED_IN, LOW);
   }
-need_1_paper = need_1_repair = 0;
-  if (irrcv.decode(&results)) {
-    Console.println(results.value, HEX);
 
-    if (results.value == IR_NEED_PAPER) {
+  lcd.print(msg2);
+
+  need_1_paper = need_1_repair = 0;
+  if (ir1rcv.decode(&results1)) {
+   // Console.println(results1.value, HEX);
+
+    if (results1.value == IR_NEED_PAPER) {
       need_1_paper = 1;
-    } else if (results.value == IR_NEED_REPAIR) {
+    } else if (results1.value == IR_NEED_REPAIR) {
       need_1_repair = 1;
     } else {
       need_1_paper = need_1_repair = 0;
     }
-    
-    irrcv.resume();
+    ir1rcv.resume();
+  }
+
+  need_2_paper = need_2_repair = 0;
+  if (ir2rcv.decode(&results2)) {
+    Console.println(results2.value, HEX);
+
+    if (results2.value == IR_NEED_PAPER) {
+      need_2_paper = 1;
+    } else if (results2.value == IR_NEED_REPAIR) {
+      need_2_repair = 1;
+    } else {
+      need_2_paper = need_2_repair = 0;
+    }
+    ir2rcv.resume();
   }
 
   if (isnan(t) || isnan(h) || isnan(ir_1_state) || isnan(ir_2_state) || isnan(pir_1_state) || isnan(pir_2_state))
@@ -167,6 +201,7 @@ need_1_paper = need_1_repair = 0;
   }
   else
   {
+    timestamp = getTimeStamp();
     // print the sensor data in serial monitor
     Console.print("Humidity: ");
     Console.print(h);
@@ -194,6 +229,8 @@ need_1_paper = need_1_repair = 0;
     Console.print("\t");
     Console.print("REPAIR 2 : ");
     Console.println(need_2_repair);
+    Console.print("UNIXTIME : ");
+    Console.println(timestamp);
     //Console.print("BTN: ");
     //Console.print(btn_state);
     Console.print("\n");
@@ -205,10 +242,8 @@ need_1_paper = need_1_repair = 0;
     itoa(ir_2_state, ir2buffer, 10);
     itoa(pir_1_state, pir1buffer, 10);
     itoa(pir_2_state, pir2buffer, 10);
-    itoa(btn_state, btnbuffer, 10);
     dtostrf(t, 5, 2, tbuffer);
     dtostrf(h, 5, 2, hbuffer);
-
 
     //add Humidity:
     parametri = "1=";
@@ -238,6 +273,10 @@ need_1_paper = need_1_repair = 0;
     parametri += ",REPAIR/";
     parametri += need_1_repair;
 
+    //add TIMESTAMP
+    parametri += ",TIMESTAMP/";
+    parametri += timestamp;
+
     //add Humidity:
     parametri += "&2=";
     parametri += "Humidity/";
@@ -265,6 +304,10 @@ need_1_paper = need_1_repair = 0;
     //add REPAIR
     parametri += ",REPAIR/";
     parametri += need_2_repair;
+
+    //add TIMESTAMP
+    parametri += ",TIMESTAMP/";
+    parametri += timestamp;
   }
 }
 
@@ -288,3 +331,23 @@ void sendData() {
     client.stop();   //disconnect from server
   }
 }
+
+String getTimeStamp() {
+  String result = "";
+  Process time;
+
+  time.begin("date");
+  time.addParameter("+%T");
+
+  time.run();
+
+  while (time.available() > 0) {
+    char c = time.read();
+    if (c != '\n') {
+      result += c;
+    }
+  }
+  time.close();
+  return result;
+}
+
