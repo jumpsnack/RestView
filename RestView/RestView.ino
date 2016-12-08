@@ -1,3 +1,6 @@
+#include <IRremote.h>
+#include <IRremoteInt.h>
+
 #include <LiquidCrystal_I2C.h>
 
 #include <Bridge.h>
@@ -169,7 +172,7 @@ void updateData() {
 
   need_1_paper = need_1_repair = 0;
   if (ir1rcv.decode(&results1)) {
-   // Console.println(results1.value, HEX);
+    Console.println(results1.value, HEX);
 
     if (results1.value == IR_NEED_PAPER) {
       need_1_paper = 1;
